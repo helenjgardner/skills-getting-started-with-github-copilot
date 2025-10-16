@@ -45,6 +45,106 @@
       <p>&copy; 2023 Mergington High School</p>
     </footer>
 
-    <script src="app.js"></script>
+    <script>
+      // Fetch activities, render cards with participants, populate select, handle signup
+      document.addEventListener('DOMContentLoaded', async () => {
+        const list = document.getElementById('activities-list');
+        const select = document.getElementById('activity');
+        const message = document.getElementById('message');
+
+        async function loadActivities() {
+          try {
+            const res = await fetch('/activities');
+            if (!res.ok) throw new Error('Failed to load activities');
+            const activities = await res.json();
+            list.innerHTML = '';
+            // render each activity card
+            Object.entries(activities).forEach(([name, a]) => {
+              const card = document.createElement('div');
+              card.className = 'activity-card';
+
+              const title = document.createElement('h4');
+              title.textContent = name;
+
+              const desc = document.createElement('p');
+              desc.textContent = a.description;
+
+              const sched = document.createElement('p');
+              sched.textContent = `Schedule: ${a.schedule}`;
+
+              // participants section
+              const participantsWrap = document.createElement('div');
+              participantsWrap.className = 'participants';
+              const participantsTitle = document.createElement('strong');
+              participantsTitle.textContent = 'Participants:';
+              participantsWrap.appendChild(participantsTitle);
+
+              const ul = document.createElement('ul');
+              if (Array.isArray(a.participants) && a.participants.length) {
+                a.participants.forEach(email => {
+                  const li = document.createElement('li');
+                  li.textContent = email;
+                  ul.appendChild(li);
+                });
+              } else {
+                const li = document.createElement('li');
+                li.textContent = 'No participants yet';
+                li.className = 'muted';
+                ul.appendChild(li);
+              }
+              participantsWrap.appendChild(ul);
+
+              card.appendChild(title);
+              card.appendChild(desc);
+              card.appendChild(sched);
+              card.appendChild(participantsWrap);
+              list.appendChild(card);
+
+              // add option to select
+              const opt = document.createElement('option');
+              opt.value = name;
+              opt.textContent = name;
+              select.appendChild(opt);
+            });
+          } catch (err) {
+            list.innerHTML = '<p class="error">Unable to load activities.</p>';
+            console.error(err);
+          }
+        }
+
+        await loadActivities();
+
+        // handle signup form submission
+        const form = document.getElementById('signup-form');
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          message.className = '';
+          const email = document.getElementById('email').value.trim();
+          const activity = select.value;
+          if (!activity) {
+            message.className = 'message error';
+            message.textContent = 'Please select an activity.';
+            return;
+          }
+          try {
+            const url = `/activities/${encodeURIComponent(activity)}/signup?email=${encodeURIComponent(email)}`;
+            const res = await fetch(url, { method: 'POST' });
+            const payload = await res.json();
+            if (!res.ok) throw new Error(payload.detail || payload.message || 'Sign up failed');
+            message.className = 'message success';
+            message.textContent = payload.message || 'Signed up successfully.';
+            // Refresh activities to show new participant
+            setTimeout(() => {
+              // clear select and list and reload
+              select.innerHTML = '<option value="">-- Select an activity --</option>';
+              loadActivities();
+            }, 600);
+          } catch (err) {
+            message.className = 'message error';
+            message.textContent = err.message;
+          }
+        });
+      });
+    </script>
   </body>
 </html>
