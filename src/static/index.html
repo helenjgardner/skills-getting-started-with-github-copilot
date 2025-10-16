@@ -83,7 +83,57 @@
               if (Array.isArray(a.participants) && a.participants.length) {
                 a.participants.forEach(email => {
                   const li = document.createElement('li');
-                  li.textContent = email;
+
+                  const span = document.createElement('span');
+                  span.className = 'participant-email';
+                  span.textContent = email;
+
+                  const btn = document.createElement('button');
+                  btn.className = 'delete-btn';
+                  btn.title = 'Unregister';
+                  btn.textContent = '\u00d7'; // multiplication sign as a delete icon
+
+                  // click handler to call unregister endpoint
+                  btn.addEventListener('click', async (ev) => {
+                    ev.stopPropagation();
+                    if (!confirm(`Unregister ${email} from ${name}?`)) return;
+                    try {
+                      // Be defensive: trim activity name and encode components
+                      const safeName = encodeURIComponent(String(name).trim());
+                      const safeEmail = encodeURIComponent(String(email).trim());
+                      const url = `/activities/${safeName}/unregister?email=${safeEmail}`;
+
+                      const res = await fetch(url, { method: 'DELETE', headers: { Accept: 'application/json' } });
+
+                      // Only attempt to parse JSON when the response is JSON
+                      let payload = {};
+                      const contentType = res.headers.get('content-type') || '';
+                      if (contentType.includes('application/json')) {
+                        try {
+                          payload = await res.json();
+                        } catch (e) {
+                          // parsing failed, leave payload empty
+                          console.warn('Failed to parse JSON response for unregister:', e);
+                        }
+                      }
+
+                      if (!res.ok) {
+                        // prefer backend detail/message, otherwise use statusText so we don't show a vague error
+                        const msg = (payload && (payload.detail || payload.message)) || res.statusText || 'Unregister failed';
+                        throw new Error(msg);
+                      }
+
+                      // Refresh activities to reflect change
+                      select.innerHTML = '<option value="">-- Select an activity --</option>';
+                      await loadActivities();
+                    } catch (err) {
+                      alert('Failed to unregister: ' + (err.message || err));
+                      console.error(err);
+                    }
+                  });
+
+                  li.appendChild(span);
+                  li.appendChild(btn);
                   ul.appendChild(li);
                 });
               } else {
