@@ -45,6 +45,156 @@
       <p>&copy; 2023 Mergington High School</p>
     </footer>
 
-    <script src="app.js"></script>
+    <script>
+      // Fetch activities, render cards with participants, populate select, handle signup
+      document.addEventListener('DOMContentLoaded', async () => {
+        const list = document.getElementById('activities-list');
+        const select = document.getElementById('activity');
+        const message = document.getElementById('message');
+
+        async function loadActivities() {
+          try {
+            const res = await fetch('/activities');
+            if (!res.ok) throw new Error('Failed to load activities');
+            const activities = await res.json();
+            list.innerHTML = '';
+            // render each activity card
+            Object.entries(activities).forEach(([name, a]) => {
+              const card = document.createElement('div');
+              card.className = 'activity-card';
+
+              const title = document.createElement('h4');
+              title.textContent = name;
+
+              const desc = document.createElement('p');
+              desc.textContent = a.description;
+
+              const sched = document.createElement('p');
+              sched.textContent = `Schedule: ${a.schedule}`;
+
+              // participants section
+              const participantsWrap = document.createElement('div');
+              participantsWrap.className = 'participants';
+              const participantsTitle = document.createElement('strong');
+              participantsTitle.textContent = 'Participants:';
+              participantsWrap.appendChild(participantsTitle);
+
+              const ul = document.createElement('ul');
+              if (Array.isArray(a.participants) && a.participants.length) {
+                a.participants.forEach(email => {
+                  const li = document.createElement('li');
+
+                  const span = document.createElement('span');
+                  span.className = 'participant-email';
+                  span.textContent = email;
+
+                  const btn = document.createElement('button');
+                  btn.className = 'delete-btn';
+                  btn.title = 'Unregister';
+                  btn.textContent = '\u00d7'; // multiplication sign as a delete icon
+
+                  // click handler to call unregister endpoint
+                  btn.addEventListener('click', async (ev) => {
+                    ev.stopPropagation();
+                    if (!confirm(`Unregister ${email} from ${name}?`)) return;
+                    try {
+                      // Be defensive: trim activity name and encode components
+                      const safeName = encodeURIComponent(String(name).trim());
+                      const safeEmail = encodeURIComponent(String(email).trim());
+                      const url = `/activities/${safeName}/unregister?email=${safeEmail}`;
+
+                      const res = await fetch(url, { method: 'DELETE', headers: { Accept: 'application/json' } });
+
+                      // Only attempt to parse JSON when the response is JSON
+                      let payload = {};
+                      const contentType = res.headers.get('content-type') || '';
+                      if (contentType.includes('application/json')) {
+                        try {
+                          payload = await res.json();
+                        } catch (e) {
+                          // parsing failed, leave payload empty
+                          console.warn('Failed to parse JSON response for unregister:', e);
+                        }
+                      }
+
+                      if (!res.ok) {
+                        // prefer backend detail/message, otherwise use statusText so we don't show a vague error
+                        const msg = (payload && (payload.detail || payload.message)) || res.statusText || 'Unregister failed';
+                        throw new Error(msg);
+                      }
+
+                      // Refresh activities to reflect change
+                      select.innerHTML = '<option value="">-- Select an activity --</option>';
+                      await loadActivities();
+                    } catch (err) {
+                      alert('Failed to unregister: ' + (err.message || err));
+                      console.error(err);
+                    }
+                  });
+
+                  li.appendChild(span);
+                  li.appendChild(btn);
+                  ul.appendChild(li);
+                });
+              } else {
+                const li = document.createElement('li');
+                li.textContent = 'No participants yet';
+                li.className = 'muted';
+                ul.appendChild(li);
+              }
+              participantsWrap.appendChild(ul);
+
+              card.appendChild(title);
+              card.appendChild(desc);
+              card.appendChild(sched);
+              card.appendChild(participantsWrap);
+              list.appendChild(card);
+
+              // add option to select
+              const opt = document.createElement('option');
+              opt.value = name;
+              opt.textContent = name;
+              select.appendChild(opt);
+            });
+          } catch (err) {
+            list.innerHTML = '<p class="error">Unable to load activities.</p>';
+            console.error(err);
+          }
+        }
+
+        await loadActivities();
+
+        // handle signup form submission
+        const form = document.getElementById('signup-form');
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          message.className = '';
+          const email = document.getElementById('email').value.trim();
+          const activity = select.value;
+          if (!activity) {
+            message.className = 'message error';
+            message.textContent = 'Please select an activity.';
+            return;
+          }
+          try {
+            const url = `/activities/${encodeURIComponent(activity)}/signup?email=${encodeURIComponent(email)}`;
+            const res = await fetch(url, { method: 'POST' });
+            const payload = await res.json();
+            if (!res.ok) throw new Error(payload.detail || payload.message || 'Sign up failed');
+            message.className = 'message success';
+            message.textContent = payload.message || 'Signed up successfully.';
+            // Refresh activities to show new participant
+            setTimeout(() => {
+              // clear select and list and reload
+              select.innerHTML = '<option value="">-- Select an activity --</option>';
+              loadActivities();
+            }, 600);
+          } catch (err) {
+            message.className = 'message error';
+            message.textContent = err.message;
+          }
+        });
+      });
+    </script>
   </body>
 </html>

@@ -10,8 +10,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/activities");
       const activities = await response.json();
 
-      // Clear loading message
+      // Clear loading message and reset select
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -20,13 +21,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
-        activityCard.innerHTML = `
+        // Base info
+        const baseHtml = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
         `;
 
+        // Participants list (bulleted). Show empty state when no participants.
+        const participantsHtml = (() => {
+          if (Array.isArray(details.participants) && details.participants.length) {
+            const items = details.participants.map(p => `<li>${p}</li>`).join("");
+            return `<div class="participants"><strong>Participants:</strong><ul>${items}</ul></div>`;
+          } else {
+            return `<div class="participants"><strong>Participants:</strong><ul><li class="muted">No participants yet</li></ul></div>`;
+          }
+        })();
+
+        activityCard.innerHTML = baseHtml + participantsHtml;
         activitiesList.appendChild(activityCard);
 
         // Add option to select dropdown
